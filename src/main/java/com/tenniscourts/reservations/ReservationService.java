@@ -1,23 +1,66 @@
 package com.tenniscourts.reservations;
 
 import com.tenniscourts.exceptions.EntityNotFoundException;
+import com.tenniscourts.guests.Guest;
+import com.tenniscourts.schedules.Schedule;
+import com.tenniscourts.schedules.ScheduleDTO;
+import com.tenniscourts.schedules.ScheduleService;
+import com.tenniscourts.tenniscourts.TennisCourt;
+import com.tenniscourts.tenniscourts.TennisCourtDTO;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 @Service
 @AllArgsConstructor
 public class ReservationService {
 
+    private final ScheduleService scheduleService;
     private final ReservationRepository reservationRepository;
-
     private final ReservationMapper reservationMapper;
 
     public ReservationDTO bookReservation(CreateReservationRequestDTO createReservationRequestDTO) {
-        throw new UnsupportedOperationException();
+
+           ScheduleDTO scheduleDTO = scheduleService.findSchedule(createReservationRequestDTO.getScheduleId());
+           TennisCourtDTO tennisCourtDTO = scheduleDTO.getTennisCourt();
+
+           TennisCourt tennisCourt = new TennisCourt();
+           tennisCourt.setName(tennisCourtDTO.getName());
+           tennisCourt.setId(tennisCourtDTO.getId());
+
+           Guest guest = new Guest();
+           guest.setId(createReservationRequestDTO.getGuestId());
+           List<Reservation> rs = reservationRepository.findBySchedule_Id(scheduleDTO.getId());
+
+           Schedule schedule = Schedule.builder()
+                   .endDateTime(scheduleDTO.getEndDateTime())
+                   .startDateTime(scheduleDTO.getStartDateTime())
+                   .tennisCourt(tennisCourt)
+                   .reservations(rs)
+                   .build();
+
+           Reservation reservation = Reservation.builder()
+                   .guest(guest)
+                   .reservationStatus(ReservationStatus.READY_TO_PLAY )
+                   .schedule(schedule)
+                   .refundValue(new BigDecimal(10))
+                   .build();
+
+          reservationRepository.save(reservation);
+
+           ReservationDTO reservationDTO = ReservationDTO.builder()
+                   .reservationStatus(reservation.getReservationStatus().toString())
+                   .guestId(reservation.getGuest().getId())
+                   .schedule(scheduleDTO)
+                   .scheduledId(scheduleDTO.getId())
+                   .build();
+
+             return  reservationDTO;
+
     }
 
     public ReservationDTO findReservation(Long reservationId) {
@@ -71,8 +114,7 @@ public class ReservationService {
         return BigDecimal.ZERO;
     }
 
-    /*TODO: This method actually not fully working, find a way to fix the issue when it's throwing the error:
-            "Cannot reschedule to the same slot.*/
+
     public ReservationDTO rescheduleReservation(Long previousReservationId, Long scheduleId) {
         Reservation previousReservation = cancel(previousReservationId);
 
